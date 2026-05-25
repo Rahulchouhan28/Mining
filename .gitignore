@@ -1,0 +1,51 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# next.js
+.next/
+out/
+build/
+dist/
+
+# user data (project state lives here, never committed)
+projects/*/
+!projects/.gitkeep
+
+# env
+.env
+.env*.local
+
+# debug / logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# build artifacts
+*.tsbuildinfo
+next-env.d.ts
+
+# exports / generated
+projects/*/exports/
+projects/*/uploads/

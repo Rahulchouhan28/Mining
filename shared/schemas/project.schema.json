@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mining-plan-generator/schemas/project.schema.json",
+  "title": "MiningPlanProject",
+  "description": "Single source of truth for a mining-plan project. Mirrors Section 10 of the spec.",
+  "type": "object",
+  "required": ["project_details"],
+  "properties": {
+    "project_details": {
+      "type": "object",
+      "required": ["project_name", "applicant_name", "mineral", "area_ha", "scale", "plan_period_years"],
+      "properties": {
+        "project_name": { "type": "string" },
+        "applicant_name": { "type": "string" },
+        "mineral": { "type": "string" },
+        "village": { "type": "string" },
+        "tehsil": { "type": "string" },
+        "district": { "type": "string" },
+        "state": { "type": "string" },
+        "area_ha": { "type": "number", "minimum": 0 },
+        "map_type": {
+          "type": "string",
+          "enum": [
+            "surface_plan", "surface_geological_plan", "geological_plan",
+            "geological_section", "progressive_mine_closure_plan",
+            "conceptual_plan", "environment_plan", "key_plan",
+            "financial_assurance_plan", "year_wise_mining_plan", "other"
+          ]
+        },
+        "scale": { "type": "string", "examples": ["1:1000", "1:2000"] },
+        "survey_date": { "type": "string", "format": "date" },
+        "plan_period_years": { "type": "integer", "minimum": 1, "maximum": 5 }
+      }
+    },
+    "uploaded_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "filename", "category"],
+        "properties": {
+          "id": { "type": "string" },
+          "filename": { "type": "string" },
+          "stored_path": { "type": "string" },
+          "category": {
+            "type": "string",
+            "enum": [
+              "surface_plan", "geological_plan", "geological_section",
+              "environment_plan", "key_plan", "progressive_mine_closure_plan",
+              "conceptual_plan", "financial_assurance_plan",
+              "borehole_data", "chemical_analysis", "production_data", "other"
+            ]
+          },
+          "mime_type": { "type": "string" },
+          "size_bytes": { "type": "integer" },
+          "pages": { "type": "integer" },
+          "selected_page": { "type": "integer" },
+          "uploaded_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "digitized_layers": {
+      "type": "object",
+      "description": "GeoJSON FeatureCollection of all user-drawn shapes.",
+      "properties": {
+        "type": { "const": "FeatureCollection" },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "geometry", "properties"],
+            "properties": {
+              "type": { "const": "Feature" },
+              "geometry": { "type": "object" },
+              "properties": {
+                "type": "object",
+                "required": ["layer_type"],
+                "properties": {
+                  "layer_type": {
+                    "type": "string",
+                    "enum": [
+                      "lease_boundary", "statutory_barrier_7_5m",
+                      "boundary_60m", "boundary_500m", "grid_lines", "contour",
+                      "road", "existing_tank", "existing_infrastructure",
+                      "existing_electric_line", "existing_borehole", "proposed_borehole",
+                      "geological_zone", "ultimate_pit_limit",
+                      "year_pit", "overburden_dump", "topsoil_stack",
+                      "backfill", "plantation", "mineral_stack_yard",
+                      "haul_road", "garland_drain", "settling_tank",
+                      "retaining_wall", "fencing", "office_shed",
+                      "water_reservoir", "village", "sensitive_structure"
+                    ]
+                  },
+                  "year": { "type": "integer", "minimum": 1, "maximum": 5 },
+                  "alternative": { "type": "string" },
+                  "label": { "type": "string" },
+                  "color": { "type": "string" },
+                  "locked": { "type": "boolean", "default": false }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "engineering_inputs": {
+      "type": "object",
+      "properties": {
+        "production": {
+          "type": "object",
+          "properties": {
+            "annual_production_target_tonnes": { "type": "number" },
+            "approved_capacity_tonnes_per_year": { "type": "number" },
+            "working_days_per_year": { "type": "integer" },
+            "shifts_per_day": { "type": "integer" },
+            "hours_per_shift": { "type": "number" }
+          }
+        },
+        "bench": {
+          "type": "object",
+          "properties": {
+            "bench_height_m": { "type": "number" },
+            "bench_width_m": { "type": "number" },
+            "face_slope_degree": { "type": "number" },
+            "overall_pit_slope_degree": { "type": "number" },
+            "ultimate_pit_depth_m": { "type": "number" }
+          }
+        },
+        "mineral_waste": {
+          "type": "object",
+          "properties": {
+            "bulk_density_t_per_m3": { "type": "number" },
+            "topsoil_thickness_m": { "type": "number" },
+            "overburden_thickness_m": { "type": "number" },
+            "mineral_recovery_percent": { "type": "number" },
+            "reject_percent": { "type": "number" }
+          }
+        },
+        "machinery": {
+          "type": "object",
+          "properties": {
+            "excavator_bucket_capacity_m3": { "type": "number" },
+            "number_of_excavators": { "type": "integer" },
+            "dumper_capacity_tonnes": { "type": "number" },
+            "number_of_dumpers": { "type": "integer" },
+            "crusher_capacity_tph": { "type": "number" },
+            "drill_machine_available": { "type": "boolean" },
+            "blasting_required": { "type": "boolean" }
+          }
+        },
+        "grade": {
+          "type": "object",
+          "description": "Mineral-specific grade fields (limestone: CaCO3, CaO, MgO, SiO2, Al2O3, Fe2O3, LOI, Moisture).",
+          "additionalProperties": { "type": "number" }
+        },
+        "environmental_constraints": {
+          "type": "object",
+          "properties": {
+            "water_body_distance_m": { "type": "number" },
+            "village_distance_m": { "type": "number" },
+            "sensitive_structure_distance_m": { "type": "number" },
+            "electric_line_present": { "type": "boolean" },
+            "drainage_present": { "type": "boolean" },
+            "forest_land_present": { "type": "boolean" },
+            "private_land_present": { "type": "boolean" },
+            "government_land_present": { "type": "boolean" }
+          }
+        },
+        "assumed_fields": {
+          "type": "array",
+          "description": "Field paths flagged ASSUMED — NEEDS VALIDATION (e.g. 'mineral_waste.bulk_density_t_per_m3').",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "selected_alternatives": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["base", "conservative", "aggressive", "low_waste", "environment_sensitive", "cost_optimized", "grade_blending", "minimum_disturbance"]
+      },
+      "default": ["base", "conservative", "aggressive"]
+    },
+    "generated_plans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["alternative", "features"],
+        "properties": {
+          "alternative": { "type": "string" },
+          "generated_at": { "type": "string", "format": "date-time" },
+          "features": {
+            "type": "object",
+            "description": "GeoJSON FeatureCollection of generated year-wise layers."
+          }
+        }
+      }
+    },
+    "quantity_tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["alternative", "rows"],
+        "properties": {
+          "alternative": { "type": "string" },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["year"],
+              "properties": {
+                "year": { "type": "integer" },
+                "pit_area_m2": { "type": "number" },
+                "excavation_volume_m3": { "type": "number" },
+                "mineral_volume_m3": { "type": "number" },
+                "mineral_tonnes": { "type": "number" },
+                "saleable_tonnes": { "type": "number" },
+                "topsoil_m3": { "type": "number" },
+                "overburden_m3": { "type": "number" },
+                "backfill_m3": { "type": "number" },
+                "plantation_area_m2": { "type": "number" },
+                "stripping_ratio": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "validation_warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["info", "warning", "error"] },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "feature_id": { "type": "string" },
+          "alternative": { "type": "string" }
+        }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}

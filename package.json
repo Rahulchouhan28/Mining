@@ -1,0 +1,17 @@
+{
+  "name": "mining-plan-generator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Year-wise mining plan generator — Next.js frontend + FastAPI backend.",
+  "scripts": {
+    "dev": "concurrently -k -n web,api -c blue,magenta \"npm:dev:web\" \"npm:dev:api\"",
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:api": "cd apps/api && .venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000",
+    "build": "cd apps/web && npm run build",
+    "start": "concurrently -k -n web,api -c blue,magenta \"cd apps/web && npm start\" \"npm run dev:api\"",
+    "test:api": "cd apps/api && .venv\\Scripts\\python.exe -m pytest -q"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
