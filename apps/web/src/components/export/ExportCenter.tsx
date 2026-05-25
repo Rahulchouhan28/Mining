@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, BarChart3, BookOpen, Download, FileSpreadsheet, FileText, Globe } from "lucide-react";
+import { Archive, BarChart3, BookOpen, Download, FileCode2, FileSpreadsheet, FileText, Globe } from "lucide-react";
 import type { Alternative } from "@/lib/types";
 
 interface Props {
@@ -68,6 +68,41 @@ export function ExportCenter({ slug, alternatives, planYears }: Props) {
                 href={`/api/projects/${slug}/export/year-plates-zip?alternative=${alt}`}
                 icon={<Archive className="h-5 w-5" />}
                 title="All years (ZIP)"
+                blurb=""
+              />
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          AutoCAD DXF (R2010, units = meters, UTM 43 N)
+        </h3>
+        <p className="mb-3 text-xs text-slate-600">
+          Open directly in AutoCAD, BricsCAD, LibreCAD, QCAD, ZWCAD or ProgeCAD. Layers named per
+          Indian RQP convention (<code>LEASE_BOUNDARY</code>, <code>BARRIER_7_5M</code>,{" "}
+          <code>YEAR_N_WORKING</code>, <code>OB_DUMP_YN</code>, <code>TOPSOIL_YN</code>,{" "}
+          <code>PLANTATION_YN</code>, etc.). DXF is the AutoCAD-native exchange format and is
+          accepted by Indian mining regulators.
+        </p>
+        {alternatives.map((alt) => (
+          <div key={`dxf-${alt}`} className="mb-4">
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">{alt}</div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
+              {Array.from({ length: planYears }, (_, i) => i + 1).map((y) => (
+                <ExportLink
+                  key={y}
+                  href={`/api/projects/${slug}/export/year-dxf?alternative=${alt}&year=${y}`}
+                  icon={<FileCode2 className="h-5 w-5" />}
+                  title={`Year ${y} DXF`}
+                  blurb=""
+                />
+              ))}
+              <ExportLink
+                href={`/api/projects/${slug}/export/year-dxfs-zip?alternative=${alt}`}
+                icon={<Archive className="h-5 w-5" />}
+                title="All DXFs (ZIP)"
                 blurb=""
               />
             </div>

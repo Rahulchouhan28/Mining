@@ -76,20 +76,27 @@ async def upload_file(slug: str, category: str = Form(...), file: UploadFile = F
     return record
 
 
+ALL_ALTERNATIVES = [
+    "base", "conservative", "aggressive",
+    "low_waste", "environment_sensitive",
+    "cost_optimized", "grade_blending", "minimum_disturbance",
+]
+
+
 @router.post("/{slug}/auto-prepare")
 def auto_prepare_project(slug: str) -> dict[str, Any]:
     """Extract a lease boundary from uploaded vector files (or synthesize one
     from area_ha), seed engineering defaults, and run the year-wise generator
-    for all selected alternatives. Returns a summary; the full project state
-    is persisted to disk and retrievable via GET /api/projects/{slug}.
+    for ALL 8 alternatives so every approach button is populated on Step 6 /
+    Step 9. Per-alternative cherry-picking is done from Step 5 (Advanced).
     """
     try:
         project = auto_prepare(slug)
     except FileNotFoundError as e:
         raise HTTPException(404, str(e)) from e
 
-    alternatives = project.get("selected_alternatives") or ["base", "conservative", "aggressive"]
-    result = generate_for_project(project, alternatives)
+    project["selected_alternatives"] = list(ALL_ALTERNATIVES)
+    result = generate_for_project(project, ALL_ALTERNATIVES)
     project["generated_plans"] = result["generated_plans"]
     project["quantity_tables"] = result["quantity_tables"]
     project["validation_warnings"] = result["validation_warnings"]
@@ -103,7 +110,7 @@ def auto_prepare_project(slug: str) -> dict[str, Any]:
 
     return {
         "slug": slug,
-        "alternatives": alternatives,
+        "alternatives": list(ALL_ALTERNATIVES),
         "lease_source": lease_source,
         "plan_count": len(result["generated_plans"]),
         "warning_count": len(result["validation_warnings"]),

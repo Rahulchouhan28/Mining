@@ -15,6 +15,7 @@ from services.excel_export import project_to_excel
 from services.comparison_pdf import compose_comparison
 from services.report_pdf import compose_report
 from services.year_plate import compose_year_plate
+from services.dxf_export import compose_year_dxf, compose_overview_dxf
 
 router = APIRouter()
 
@@ -135,6 +136,80 @@ def export_year_plates_zip(slug: str, alternative: str = Query("base")) -> Respo
                     + (("\nFailures:\n  " + "\n  ".join(failures)) if failures else ""))
     return Response(buf.getvalue(), media_type="application/zip", headers={
         "content-disposition": f'attachment; filename="{slug}_year_plates_{alternative}.zip"',
+    })
+
+
+@router.get("/{slug}/export/year-dxf")
+def export_year_dxf(
+    slug: str,
+    alternative: str = Query("base"),
+    year: int = Query(1, ge=1, le=5),
+) -> Response:
+    """Per-year statutory plate as AutoCAD DXF (R2010, units = meters, UTM 43 N)."""
+    project = _load(slug)
+    try:
+        body = compose_year_dxf(project, alternative=alternative, year=year)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    plate_letter = ["", "A", "B", "C", "D", "E"][year]
+    filename = f"year_{year}_development_plan_{alternative}_5{plate_letter}.dxf"
+    (storage.project_dir(slug) / "exports" / filename).write_bytes(body)
+    return Response(body, media_type="application/vnd.autodesk.dxf", headers={
+        "content-disposition": f'attachment; filename="{filename}"',
+    })
+
+
+@router.get("/{slug}/export/overview-dxf")
+def export_overview_dxf(slug: str, alternative: str = Query("base")) -> Response:
+    """Year-wise overview plate as AutoCAD DXF."""
+    project = _load(slug)
+    try:
+        body = compose_overview_dxf(project, alternative=alternative)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    filename = f"year_wise_overview_{alternative}.dxf"
+    (storage.project_dir(slug) / "exports" / filename).write_bytes(body)
+    return Response(body, media_type="application/vnd.autodesk.dxf", headers={
+        "content-disposition": f'attachment; filename="{filename}"',
+    })
+
+
+@router.get("/{slug}/export/year-dxfs-zip")
+def export_year_dxfs_zip(slug: str, alternative: str = Query("base")) -> Response:
+    """All per-year DXF plates + overview, bundled into a single ZIP."""
+    project = _load(slug)
+    details = project.get("project_details") or {}
+    plan_years = int(details.get("plan_period_years") or 5)
+    plan_years = max(1, min(5, plan_years))
+
+    buf = io.BytesIO()
+    plate_letter = ["", "A", "B", "C", "D", "E"]
+    failures: list[str] = []
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for year in range(1, plan_years + 1):
+            try:
+                dxf = compose_year_dxf(project, alternative=alternative, year=year)
+                zf.writestr(f"Year_{year}_development_plan_5{plate_letter[year]}.dxf", dxf)
+            except Exception as e:  # noqa: BLE001
+                failures.append(f"year {year}: {e}")
+        try:
+            zf.writestr(f"Year_wise_overview_{alternative}.dxf",
+                        compose_overview_dxf(project, alternative=alternative))
+        except Exception as e:  # noqa: BLE001
+            failures.append(f"overview: {e}")
+        zf.writestr("README.txt",
+                    "AutoCAD DXF plates (R2010, units = meters, EPSG:32643 UTM 43 N)\n"
+                    f"Project: {details.get('project_name', slug)} · approach: {alternative}\n\n"
+                    "Open in AutoCAD, BricsCAD, LibreCAD, QCAD, ZWCAD, ProgeCAD, etc.\n"
+                    "All layers named per Indian RQP convention (LEASE_BOUNDARY,\n"
+                    "BARRIER_7_5M, YEAR_N_WORKING, OB_DUMP_YN, TOPSOIL_YN, PLANTATION_YN,\n"
+                    "ULT_PIT_LIMIT, HAUL_ROAD, GARLAND_DRAIN, SETTLING_TANK,\n"
+                    "BH_EXISTING, BH_PROPOSED, GRID, TITLE_BLOCK, CERTIFICATION).\n\n"
+                    "Conceptual output. Final statutory submission must be verified\n"
+                    "and signed by a qualified mining engineer / RQP / competent person.\n"
+                    + (("\nFailures:\n  " + "\n  ".join(failures)) if failures else ""))
+    return Response(buf.getvalue(), media_type="application/zip", headers={
+        "content-disposition": f'attachment; filename="{slug}_year_plates_{alternative}_dxf.zip"',
     })
 
 

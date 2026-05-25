@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ChevronDown, FileDown, Info, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, ChevronDown, FileDown, FileCode2, Info, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -138,6 +138,38 @@ export function AutoPlanScreen({ slug, project }: Props) {
         setError(e instanceof Error ? e.message : "Re-generate failed");
       }
     });
+  }
+
+  async function downloadDxf() {
+    setError(null);
+    setDownloading(true);
+    try {
+      let url: string;
+      let filename: string;
+      if (activeYear === "all") {
+        url = `/api/projects/${slug}/export/overview-dxf?alternative=${activeAlt}`;
+        filename = `${slug}_${activeAlt}_year_wise_overview.dxf`;
+      } else {
+        const letter = ["", "A", "B", "C", "D", "E"][activeYear];
+        url = `/api/projects/${slug}/export/year-dxf?alternative=${activeAlt}&year=${activeYear}`;
+        filename = `${slug}_${activeAlt}_year_${activeYear}_development_plan_5${letter}.dxf`;
+      }
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+      const blob = await r.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "DXF download failed");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   async function downloadPdf() {
@@ -346,7 +378,7 @@ export function AutoPlanScreen({ slug, project }: Props) {
         </p>
       )}
 
-      <div className="fixed bottom-6 right-8 z-30">
+      <div className="fixed bottom-6 right-8 z-30 flex flex-col items-end gap-2">
         <Button
           type="button"
           variant="primary"
@@ -356,11 +388,22 @@ export function AutoPlanScreen({ slug, project }: Props) {
           className="shadow-xl"
         >
           {downloading ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileDown className="h-5 w-5" />}
-          {downloading
-            ? "Generating PDF…"
-            : activeYear === "all"
-              ? `Convert overview to PDF (${activeAlt})`
-              : `Convert Year ${activeYear} to PDF (${activeAlt})`}
+          {activeYear === "all"
+            ? `Convert overview to PDF (${activeAlt})`
+            : `Convert Year ${activeYear} to PDF (${activeAlt})`}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="md"
+          disabled={downloading}
+          onClick={downloadDxf}
+          className="shadow-xl"
+        >
+          <FileCode2 className="h-4 w-4" />
+          {activeYear === "all"
+            ? `Download DXF — overview (${activeAlt})`
+            : `Download DXF — Year ${activeYear} (${activeAlt})`}
         </Button>
       </div>
     </div>

@@ -318,6 +318,16 @@ def _ensure_engineering_defaults(project: dict[str, Any]) -> dict[str, Any]:
         ei[section] = cur
     ei["assumed_fields"] = sorted(assumed)
     project["engineering_inputs"] = ei
-    if not project.get("selected_alternatives"):
-        project["selected_alternatives"] = ["base", "conservative", "aggressive"]
+    # Default to ALL eight alternatives so every approach button shows on Step
+    # 6 + Step 9. The auto-upgrade clause also catches projects saved before
+    # this change (which used the legacy 3-alternative default).
+    DEFAULT_ALTERNATIVES = [
+        "base", "conservative", "aggressive",
+        "low_waste", "environment_sensitive",
+        "cost_optimized", "grade_blending", "minimum_disturbance",
+    ]
+    LEGACY_DEFAULT = {"base", "conservative", "aggressive"}
+    current = project.get("selected_alternatives") or []
+    if not current or set(current) == LEGACY_DEFAULT:
+        project["selected_alternatives"] = DEFAULT_ALTERNATIVES
     return project
