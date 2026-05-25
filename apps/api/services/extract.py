@@ -41,15 +41,100 @@ def auto_prepare(slug: str) -> dict[str, Any]:
     project = _ensure_engineering_defaults(project)
 
     lease_feature = _try_extract_from_uploads(slug, project) or _synthetic_lease(project)
+    borehole_features = _try_extract_boreholes(slug, project)
 
     layers = project.get("digitized_layers") or {"type": "FeatureCollection", "features": []}
-    others = [f for f in layers.get("features", []) if (f.get("properties") or {}).get("layer_type") != "lease_boundary"]
+    # Preserve other user-drawn features; replace lease + replace existing
+    # auto-extracted boreholes (re-running auto-prepare refreshes both).
+    others = [
+        f for f in layers.get("features", [])
+        if (f.get("properties") or {}).get("layer_type") != "lease_boundary"
+        and not (f.get("properties") or {}).get("auto_extracted")
+    ]
     layers["type"] = "FeatureCollection"
-    layers["features"] = [lease_feature, *others]
+    layers["features"] = [lease_feature, *borehole_features, *others]
     project["digitized_layers"] = layers
 
     storage.save_project(slug, project)
     return project
+
+
+def _try_extract_boreholes(slug: str, project: dict[str, Any]) -> list[dict[str, Any]]:
+    """Parse any uploaded `borehole_data` CSV into proposed_borehole point features.
+
+    The CSV is expected to have headers for latitude and longitude (any of the
+    common synonyms below). Other columns are kept in the feature properties.
+    Falls back to an empty list if no borehole CSV is uploaded or parsing fails.
+    """
+    out: list[dict[str, Any]] = []
+    for record in project.get("uploaded_files") or []:
+        if record.get("category") != "borehole_data":
+            continue
+        rel = record.get("stored_path")
+        if not rel:
+            continue
+        full = storage.ROOT.parent / rel
+        if not full.exists() or not full.name.lower().endswith(".csv"):
+            continue
+        try:
+            out.extend(_boreholes_from_csv(full, source=record.get("filename") or full.name))
+        except Exception:  # noqa: BLE001 — extraction is best-effort
+            continue
+    return out
+
+
+_LAT_KEYS = {"lat", "latitude", "y", "northing", "lat_dd", "lat (deg)"}
+_LON_KEYS = {"lon", "lng", "long", "longitude", "x", "easting", "lon_dd", "lng (deg)", "long (deg)"}
+_ID_KEYS  = {"id", "borehole", "bh", "bh_id", "name", "hole", "hole_id"}
+
+
+def _boreholes_from_csv(path: Path, *, source: str) -> list[dict[str, Any]]:
+    import csv as _csv
+
+    with path.open("r", encoding="utf-8-sig", newline="") as fh:
+        reader = _csv.DictReader(fh)
+        if not reader.fieldnames:
+            return []
+        col_map: dict[str, str] = {}
+        for col in reader.fieldnames:
+            lower = col.strip().lower()
+            if lower in _LAT_KEYS and "lat" not in col_map:
+                col_map["lat"] = col
+            elif lower in _LON_KEYS and "lon" not in col_map:
+                col_map["lon"] = col
+            elif lower in _ID_KEYS and "id" not in col_map:
+                col_map["id"] = col
+        if "lat" not in col_map or "lon" not in col_map:
+            return []
+
+        features: list[dict[str, Any]] = []
+        for row in reader:
+            try:
+                lat = float(row[col_map["lat"]])
+                lon = float(row[col_map["lon"]])
+            except (TypeError, ValueError, KeyError):
+                continue
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                continue
+            props: dict[str, Any] = {
+                "layer_type": "proposed_borehole",
+                "label": row.get(col_map["id"]) if "id" in col_map else None,
+                "auto_extracted": True,
+                "source": f"auto-extracted from {source}",
+            }
+            # Keep all extra columns as metadata
+            for k, v in row.items():
+                if k in (col_map.get("lat"), col_map.get("lon"), col_map.get("id")):
+                    continue
+                if v is None or v == "":
+                    continue
+                props[f"bh_{k.strip().lower().replace(' ', '_')}"] = v
+            features.append({
+                "type": "Feature",
+                "properties": {k: v for k, v in props.items() if v is not None},
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            })
+        return features
 
 
 def _try_extract_from_uploads(slug: str, project: dict[str, Any]) -> dict[str, Any] | None:

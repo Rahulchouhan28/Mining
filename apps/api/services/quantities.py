@@ -16,6 +16,8 @@ def compute_year_quantities(
     mineral_recovery_percent: float,
     *,
     backfill_started_year: int = 3,
+    backfill_fraction: float = 0.4,
+    plantation_fraction: float = 0.1,
 ) -> dict[str, Any]:
     """Return one row of the per-year quantity table.
 
@@ -33,8 +35,8 @@ def compute_year_quantities(
     topsoil_m3 = pit_area_m2 * topsoil_thickness
     overburden_m3 = pit_area_m2 * overburden_thickness
     # Backfill kicks in once we're deep enough that the year-1 pit is mined out.
-    backfill_m3 = 0.0 if year < backfill_started_year else 0.4 * mineral_volume_m3
-    plantation_area_m2 = 0.1 * pit_area_m2
+    backfill_m3 = 0.0 if year < backfill_started_year else backfill_fraction * mineral_volume_m3
+    plantation_area_m2 = plantation_fraction * pit_area_m2
     stripping_ratio = (
         (topsoil_m3 + overburden_m3) / mineral_volume_m3 if mineral_volume_m3 > 0 else 0.0
     )

@@ -23,11 +23,11 @@ const CARDS: AltCard[] = [
   { key: "base",                  title: "B — Base",                 blurb: "Balanced plan following uploaded layout and standard five-year development.", enabled: true },
   { key: "conservative",          title: "A — Conservative",         blurb: "Lower production, minimum disturbance, slow pit advancement.", enabled: true },
   { key: "aggressive",            title: "C — Aggressive",           blurb: "Maximum permitted production, faster excavation, larger machinery requirement.", enabled: true },
-  { key: "low_waste",             title: "D — Low-Waste / Backfill", blurb: "Minimizes external overburden dump and prioritizes backfilling.", enabled: false },
-  { key: "environment_sensitive", title: "E — Environment-Sensitive",blurb: "Avoids tanks, habitation, roads, temples, electric lines.", enabled: false },
-  { key: "cost_optimized",        title: "F — Cost-Optimized",       blurb: "Minimizes haul distance, road length, machinery movement and cost.", enabled: false },
-  { key: "grade_blending",        title: "G — Grade-Blending",       blurb: "Plans excavation based on grade zones and buyer specification.", enabled: false },
-  { key: "minimum_disturbance",   title: "H — Minimum-Disturbance",  blurb: "Minimizes disturbed area and delays sensitive land disturbance.", enabled: false },
+  { key: "low_waste",             title: "D — Low-Waste / Backfill", blurb: "Backfills earlier and at a larger fraction. Shrinks the external OB dump.", enabled: true },
+  { key: "environment_sensitive", title: "E — Environment-Sensitive",blurb: "Pit centroid pushed away from villages, tanks, electric lines, sensitive structures. Larger plantation footprint.", enabled: true },
+  { key: "cost_optimized",        title: "F — Cost-Optimized",       blurb: "Pit biased toward the closest lease perimeter exit to minimise haul distance.", enabled: true },
+  { key: "grade_blending",        title: "G — Grade-Blending",       blurb: "Pit biased toward digitised geological-zone centroids when present.", enabled: true },
+  { key: "minimum_disturbance",   title: "H — Minimum-Disturbance",  blurb: "Smaller annual footprint, early backfill, reduced external dump.", enabled: true },
 ];
 
 export function AlternativesForm({ slug, initial }: Props) {

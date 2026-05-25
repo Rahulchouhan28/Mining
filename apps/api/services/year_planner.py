@@ -32,7 +32,8 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import nearest_points, unary_union
 
 from services.projection import geom_to_utm, geom_to_wgs, geojson_to_shape, shape_to_geojson
-from services.quantities import ALTERNATIVE_PRODUCTION_MULTIPLIER, compute_year_quantities
+from services.quantities import compute_year_quantities
+from services.strategies import get as get_strategy
 from services.validation import validate_engineering_inputs, validate_geometry
 
 
@@ -115,8 +116,17 @@ def generate_for_alternative(project: dict[str, Any], alternative: str) -> Plann
     topsoil_h = float(mw.get("topsoil_thickness_m") or 0)
     ob_h = float(mw.get("overburden_thickness_m") or 0)
 
-    multiplier = ALTERNATIVE_PRODUCTION_MULTIPLIER.get(alternative, 1.0)
-    effective_target = annual_target_t * multiplier
+    strategy = get_strategy(alternative)
+    effective_target = annual_target_t * strategy.production_multiplier
+
+    # All UTM features in the project (used by strategies that need to
+    # see sensitive structures, geological zones, etc.)
+    all_features_utm: list[tuple[dict[str, Any], BaseGeometry]] = []
+    for f in (project.get("digitized_layers") or {}).get("features") or []:
+        try:
+            all_features_utm.append((f.get("properties") or {}, geom_to_utm(geojson_to_shape(f["geometry"]))))
+        except Exception:
+            continue
 
     # Required pit area per year (m²)
     if density > 0 and recovery > 0 and bench_h > 0:
@@ -135,9 +145,8 @@ def generate_for_alternative(project: dict[str, Any], alternative: str) -> Plann
             "alternative": alternative,
         })
 
-    # Concentric expansion from centroid
-    centroid = available.centroid
-    cx, cy = centroid.x, centroid.y
+    # Concentric expansion from a strategy-chosen seed point
+    cx, cy = strategy.center_fn(available, lease, all_features_utm)
     year_polys: list[Polygon] = []
     prev_cum: Polygon | None = None
     for y in range(1, plan_years + 1):
@@ -169,7 +178,9 @@ def generate_for_alternative(project: dict[str, Any], alternative: str) -> Plann
     plantation: Polygon | None = None
     if ob_region is not None and not ob_region.is_empty and ob_region.area > 10:
         # OB takes roughly proportional area to total OB volume / mean dump height.
-        total_ob_m3 = ultimate_pit_poly.area * ob_h
+        # Low-Waste / Min-Disturbance shrink the external dump because more is
+        # back-haul-filled into the pit.
+        total_ob_m3 = ultimate_pit_poly.area * ob_h * strategy.ob_dump_external_fraction
         dump_height = 6.0  # assumed lift height
         ob_target_area = min(total_ob_m3 / dump_height, ob_region.area * 0.6)
         ob_dump = _shrink_to_area(ob_region, ob_target_area, prefer_center=False)
@@ -184,7 +195,7 @@ def generate_for_alternative(project: dict[str, Any], alternative: str) -> Plann
             rem2 = remaining_poly.difference(topsoil_stack.buffer(2.0)) if topsoil_stack is not None else remaining_poly
             rem2_poly = _largest_polygon(rem2)
             if rem2_poly is not None and rem2_poly.area > 10:
-                plantation_target = min(ultimate_pit_poly.area * 0.1, rem2_poly.area)
+                plantation_target = min(ultimate_pit_poly.area * strategy.plantation_fraction, rem2_poly.area)
                 plantation = _shrink_to_area(rem2_poly, plantation_target, prefer_center=True)
 
     # Haul road: line from ultimate-pit boundary to nearest lease boundary
@@ -219,6 +230,7 @@ def generate_for_alternative(project: dict[str, Any], alternative: str) -> Plann
             topsoil_thickness=topsoil_h,
             overburden_thickness=ob_h,
             mineral_recovery_percent=(recovery * 100.0) if recovery > 0 else 100.0,
+            **strategy.quantity_kwargs(),
         ))
 
     warnings.extend(validate_geometry(lease=lease, barrier=barrier_inner, pits=year_polys, alternative=alternative))

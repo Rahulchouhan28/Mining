@@ -64,6 +64,35 @@ LAYER_LABEL: dict[str, str] = {
     "mineral_stack_yard": "Mineral Stack Yard",
 }
 
+PLATE_LAYERS: dict[str, set[str] | None] = {
+    "year_wise_mining_plan": None,  # None = include everything we know how to draw
+    "progressive_mine_closure_plan": {
+        "lease_boundary", "statutory_barrier_7_5m", "ultimate_pit_limit",
+        "year_pit", "backfill", "plantation", "garland_drain", "settling_tank",
+    },
+    "conceptual_plan": {
+        "lease_boundary", "statutory_barrier_7_5m", "ultimate_pit_limit",
+        "overburden_dump", "plantation",
+    },
+    "environment_plan": {
+        "lease_boundary", "statutory_barrier_7_5m", "plantation",
+        "garland_drain", "settling_tank", "existing_tank", "water_reservoir",
+        "village", "sensitive_structure", "existing_electric_line",
+    },
+    "key_plan": {
+        "lease_boundary", "statutory_barrier_7_5m", "road", "village",
+    },
+}
+
+PLATE_TITLES: dict[str, str] = {
+    "year_wise_mining_plan":           "YEAR-WISE MINING PLAN",
+    "progressive_mine_closure_plan":   "PROGRESSIVE MINE CLOSURE PLAN",
+    "conceptual_plan":                 "CONCEPTUAL PLAN",
+    "environment_plan":                "ENVIRONMENT PLAN",
+    "key_plan":                        "KEY PLAN",
+}
+
+
 PAPER_INCHES: dict[str, tuple[float, float]] = {
     "A4_landscape":  (11.69,  8.27),
     "A4_portrait":   ( 8.27, 11.69),
@@ -268,6 +297,13 @@ def compose_plate(
         except Exception:
             continue
 
+    # Apply plate-type layer filter
+    plate_filter = PLATE_LAYERS.get(plate_type)
+    if plate_filter is not None:
+        utm_features = [(p, g) for (p, g) in utm_features if p.get("layer_type") in plate_filter]
+        if not utm_features:
+            raise ValueError(f"Plate '{plate_type}' has no eligible features to draw.")
+
     fig = plt.figure(figsize=fig_size, dpi=200)
     fig.patch.set_facecolor("white")
 
@@ -320,7 +356,8 @@ def compose_plate(
                     color="#7c2d12", ha="center", va="center", zorder=20)
 
     # Title and chrome
-    ax.set_title(f"{plate_type.replace('_', ' ').upper()} — Scale 1:{scale}",
+    title = PLATE_TITLES.get(plate_type, plate_type.replace("_", " ").upper())
+    ax.set_title(f"{title} — Scale 1:{scale}",
                  fontsize=12, fontweight="bold", color="#0f172a", pad=10)
 
     # Scale bar — pick a round length, ~1/5 of the map width
