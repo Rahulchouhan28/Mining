@@ -15,7 +15,11 @@ export default async function Step9Page({ params }: Props) {
       description="Download PDF plates, GeoJSON, KML, Excel quantity tables, or the full ZIP package."
       primaryAction={null}
     >
-      <ExportCenter slug={slug} alternatives={project.selected_alternatives ?? ["base"]} />
+      <ExportCenter
+        slug={slug}
+        alternatives={project.selected_alternatives ?? ["base"]}
+        planYears={Math.min(5, Math.max(1, project.project_details.plan_period_years ?? 5))}
+      />
     </StepShell>
   );
 }

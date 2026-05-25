@@ -6,6 +6,7 @@ import type { Alternative } from "@/lib/types";
 interface Props {
   slug: string;
   alternatives: Alternative[];
+  planYears: number;
 }
 
 interface ExportLinkProps {
@@ -37,19 +38,53 @@ function ExportLink({ href, icon, title, blurb, download }: ExportLinkProps) {
   );
 }
 
-export function ExportCenter({ slug, alternatives }: Props) {
+export function ExportCenter({ slug, alternatives, planYears }: Props) {
+  const PLATE_LETTERS = ["", "A", "B", "C", "D", "E"];
   return (
     <div className="space-y-6">
       <section>
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">PDF Plates</h3>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Per-Year Statutory Plates
+        </h3>
+        <p className="mb-3 text-xs text-slate-600">
+          One A3 plate per year, modelled on the statutory reference. Each plate shows the year&apos;s
+          mine working highlighted, faint outlines of prior years, this year&apos;s cumulative OB / topsoil
+          / plantation, and a <em>DIRECTION OF NEXT YEAR</em> arrow.
+        </p>
+        {alternatives.map((alt) => (
+          <div key={alt} className="mb-4">
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">{alt}</div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
+              {Array.from({ length: planYears }, (_, i) => i + 1).map((y) => (
+                <ExportLink
+                  key={y}
+                  href={`/api/projects/${slug}/export/year-plate?alternative=${alt}&year=${y}&paper=A3&orientation=landscape&scale=1000`}
+                  icon={<FileText className="h-5 w-5" />}
+                  title={`Year ${y} — Plate 5${PLATE_LETTERS[y]}`}
+                  blurb=""
+                />
+              ))}
+              <ExportLink
+                href={`/api/projects/${slug}/export/year-plates-zip?alternative=${alt}`}
+                icon={<Archive className="h-5 w-5" />}
+                title="All years (ZIP)"
+                blurb=""
+              />
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Overview Plates</h3>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {alternatives.map((alt) => (
             <ExportLink
               key={alt}
               href={`/api/projects/${slug}/export/pdf?alternative=${alt}&plate_type=year_wise_mining_plan&paper=A3&orientation=landscape&scale=1000`}
               icon={<FileText className="h-5 w-5" />}
-              title={`Year-Wise Mining Plan (${alt})`}
-              blurb="A3 landscape, 1:1000, year-coded pit polygons, north arrow, scale bar, title block, certification box."
+              title={`Year-Wise Overview (${alt})`}
+              blurb="A3 landscape, all years on one map, year-coded pit polygons."
             />
           ))}
         </div>

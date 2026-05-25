@@ -14,6 +14,7 @@ from services.kml_export import project_to_kml
 from services.excel_export import project_to_excel
 from services.comparison_pdf import compose_comparison
 from services.report_pdf import compose_report
+from services.year_plate import compose_year_plate
 
 router = APIRouter()
 
@@ -75,6 +76,65 @@ def export_pdf(
 
     return Response(body, media_type="application/pdf", headers={
         "content-disposition": f'attachment; filename="{filename}"',
+    })
+
+
+@router.get("/{slug}/export/year-plate")
+def export_year_plate(
+    slug: str,
+    alternative: str = Query("base"),
+    year: int = Query(1, ge=1, le=5),
+    paper: str = Query("A3"),
+    orientation: str = Query("landscape"),
+    scale: int = Query(1000, ge=100, le=20000),
+) -> Response:
+    """Render the single-year statutory plate for `year` (Plate 5A/5B/...)."""
+    project = _load(slug)
+    try:
+        body = compose_year_plate(project, alternative=alternative, year=year,
+                                  paper=paper, orientation=orientation, scale=scale)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+    exports_dir = storage.project_dir(slug) / "exports"
+    plate_letter = ["", "A", "B", "C", "D", "E"][year]
+    filename = f"year_{year}_development_plan_{alternative}_5{plate_letter}.pdf"
+    (exports_dir / filename).write_bytes(body)
+
+    return Response(body, media_type="application/pdf", headers={
+        "content-disposition": f'attachment; filename="{filename}"',
+    })
+
+
+@router.get("/{slug}/export/year-plates-zip")
+def export_year_plates_zip(slug: str, alternative: str = Query("base")) -> Response:
+    """All per-year plates for `alternative` bundled into a single ZIP."""
+    project = _load(slug)
+    details = project.get("project_details") or {}
+    plan_years = int(details.get("plan_period_years") or 5)
+    plan_years = max(1, min(5, plan_years))
+
+    buf = io.BytesIO()
+    plate_letter = ["", "A", "B", "C", "D", "E"]
+    failures: list[str] = []
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for year in range(1, plan_years + 1):
+            try:
+                pdf = compose_year_plate(project, alternative=alternative, year=year,
+                                         paper="A3", orientation="landscape", scale=1000)
+                zf.writestr(f"Year_{year}_development_plan_5{plate_letter[year]}.pdf", pdf)
+            except Exception as e:  # noqa: BLE001
+                failures.append(f"year {year}: {e}")
+        zf.writestr("README.txt",
+                    f"Per-year statutory plates for: "
+                    f"{details.get('project_name', slug)} (approach: {alternative})\n"
+                    "Each plate shows that year's pit highlighted with faint outlines\n"
+                    "of prior years and a DIRECTION OF NEXT YEAR arrow.\n\n"
+                    "Conceptual output. Final statutory submission must be verified\n"
+                    "and signed by a qualified mining engineer / RQP / competent person.\n"
+                    + (("\nFailures:\n  " + "\n  ".join(failures)) if failures else ""))
+    return Response(buf.getvalue(), media_type="application/zip", headers={
+        "content-disposition": f'attachment; filename="{slug}_year_plates_{alternative}.zip"',
     })
 
 

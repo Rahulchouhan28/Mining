@@ -37,12 +37,16 @@ interface Props {
   project: MiningPlanProject;
 }
 
+type YearView = "all" | 1 | 2 | 3 | 4 | 5;
+
 export function AutoPlanScreen({ slug, project }: Props) {
   const router = useRouter();
   const alternatives: Alternative[] = project.selected_alternatives?.length
     ? project.selected_alternatives
     : ["base", "conservative", "aggressive"];
   const [activeAlt, setActiveAlt] = useState<Alternative>(alternatives[0]);
+  const planYears = Math.min(5, Math.max(1, project.project_details.plan_period_years ?? 5));
+  const [activeYear, setActiveYear] = useState<YearView>(1);
   const [editOpen, setEditOpen] = useState(false);
   const [regenerating, startRegen] = useTransition();
   const [downloading, setDownloading] = useState(false);
@@ -64,8 +68,30 @@ export function AutoPlanScreen({ slug, project }: Props) {
       (f) => f.properties.layer_type === "lease_boundary",
     );
     const generated = plan?.features.features ?? [];
-    return { type: "FeatureCollection", features: [...lease, ...generated] };
-  }, [project, activeAlt]);
+    if (activeYear === "all") {
+      // Overview: keep year_pit per year, but for OB/topsoil/plantation only
+      // keep the year=plan_years feature (final cumulative state).
+      const finalFeatures = generated.filter((f) => {
+        const yr = f.properties.year;
+        const lt = f.properties.layer_type;
+        if (["overburden_dump", "topsoil_stack", "plantation"].includes(lt) && typeof yr === "number") {
+          return yr === planYears;
+        }
+        return true;
+      });
+      return { type: "FeatureCollection", features: [...lease, ...finalFeatures] };
+    }
+    // Per-year: drop other-year features for year-tagged layers; keep
+    // always-on layers (lease, barrier, ult pit, haul road, boreholes, etc.).
+    const YEAR_TAGGED = new Set(["year_pit", "overburden_dump", "topsoil_stack", "plantation"]);
+    const filtered = generated.filter((f) => {
+      const lt = f.properties.layer_type;
+      const yr = f.properties.year;
+      if (YEAR_TAGGED.has(lt)) return yr === activeYear;
+      return true;
+    });
+    return { type: "FeatureCollection", features: [...lease, ...filtered] };
+  }, [project, activeAlt, activeYear, planYears]);
 
   const quantity = project.quantity_tables?.find((q) => q.alternative === activeAlt);
   const altWarnings = (project.validation_warnings ?? []).filter(
@@ -118,24 +144,36 @@ export function AutoPlanScreen({ slug, project }: Props) {
     setError(null);
     setDownloading(true);
     try {
-      const params = new URLSearchParams({
-        alternative: activeAlt,
-        plate_type: "year_wise_mining_plan",
-        paper: "A3",
-        orientation: "landscape",
-        scale: "1000",
-      });
-      const r = await fetch(`/api/projects/${slug}/export/pdf?${params}`);
+      let url: string;
+      let filename: string;
+      if (activeYear === "all") {
+        const params = new URLSearchParams({
+          alternative: activeAlt,
+          plate_type: "year_wise_mining_plan",
+          paper: "A3", orientation: "landscape", scale: "1000",
+        });
+        url = `/api/projects/${slug}/export/pdf?${params}`;
+        filename = `${slug}_${activeAlt}_year_wise_overview.pdf`;
+      } else {
+        const letter = ["", "A", "B", "C", "D", "E"][activeYear];
+        const params = new URLSearchParams({
+          alternative: activeAlt, year: String(activeYear),
+          paper: "A3", orientation: "landscape", scale: "1000",
+        });
+        url = `/api/projects/${slug}/export/year-plate?${params}`;
+        filename = `${slug}_${activeAlt}_year_${activeYear}_development_plan_5${letter}.pdf`;
+      }
+      const r = await fetch(url);
       if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
       const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = `${slug}_${activeAlt}_year_wise_mining_plan_1to1000.pdf`;
+      a.href = blobUrl;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(blobUrl);
     } catch (e) {
       setError(e instanceof Error ? e.message : "PDF download failed");
     } finally {
@@ -172,6 +210,32 @@ export function AutoPlanScreen({ slug, project }: Props) {
               {a.replace("_", " ")}
             </button>
           ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Year</span>
+          {Array.from({ length: planYears }, (_, i) => (i + 1) as 1 | 2 | 3 | 4 | 5).map((y) => (
+            <button
+              key={y}
+              type="button"
+              onClick={() => setActiveYear(y)}
+              className={cn(
+                "rounded-md px-2.5 py-1.5 text-xs font-medium transition",
+                y === activeYear ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200",
+              )}
+            >
+              Year {y}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setActiveYear("all")}
+            className={cn(
+              "rounded-md px-2.5 py-1.5 text-xs font-medium transition",
+              activeYear === "all" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200",
+            )}
+          >
+            All / overview
+          </button>
         </div>
         {quantity && (
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
@@ -292,7 +356,11 @@ export function AutoPlanScreen({ slug, project }: Props) {
           className="shadow-xl"
         >
           {downloading ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileDown className="h-5 w-5" />}
-          {downloading ? "Generating PDF…" : `Convert ${activeAlt} to PDF`}
+          {downloading
+            ? "Generating PDF…"
+            : activeYear === "all"
+              ? `Convert overview to PDF (${activeAlt})`
+              : `Convert Year ${activeYear} to PDF (${activeAlt})`}
         </Button>
       </div>
     </div>

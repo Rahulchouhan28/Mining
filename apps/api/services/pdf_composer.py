@@ -304,6 +304,11 @@ def compose_plate(
         if not utm_features:
             raise ValueError(f"Plate '{plate_type}' has no eligible features to draw.")
 
+    # The planner emits OB / topsoil / plantation as per-year cumulative
+    # polygons (Year N polygon contains Years 1..N). The overview plate wants
+    # only the final-state polygon (year == max), not all of them stacked.
+    utm_features = _dedupe_cumulative_to_final(utm_features)
+
     fig = plt.figure(figsize=fig_size, dpi=200)
     fig.patch.set_facecolor("white")
 
@@ -375,6 +380,30 @@ def compose_plate(
     fig.savefig(buf, format="pdf", bbox_inches=None, dpi=300)
     plt.close(fig)
     return buf.getvalue()
+
+
+CUMULATIVE_LAYERS = {"overburden_dump", "topsoil_stack", "plantation"}
+
+
+def _dedupe_cumulative_to_final(features: list[tuple[dict[str, Any], Any]]) -> list[tuple[dict[str, Any], Any]]:
+    """For each cumulative layer type, keep only the year=max feature."""
+    max_year: dict[str, int] = {}
+    for props, _ in features:
+        lt = props.get("layer_type")
+        yr = props.get("year")
+        if lt in CUMULATIVE_LAYERS and isinstance(yr, int):
+            max_year[lt] = max(max_year.get(lt, 0), yr)
+    out: list[tuple[dict[str, Any], Any]] = []
+    for props, geom in features:
+        lt = props.get("layer_type")
+        yr = props.get("year")
+        if lt in CUMULATIVE_LAYERS and isinstance(yr, int):
+            if yr == max_year.get(lt):
+                out.append((props, geom))
+            # else skip
+        else:
+            out.append((props, geom))
+    return out
 
 
 def _round_scale_length(raw_m: float) -> float:

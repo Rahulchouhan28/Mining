@@ -212,11 +212,32 @@ def generate_for_alternative(project: dict[str, Any], alternative: str) -> Plann
             continue
         features.append(_wgs_feature("year_pit", yp, year=i, label=f"Year {i} Pit", alternative=alternative))
     if ob_dump and not ob_dump.is_empty:
-        features.append(_wgs_feature("overburden_dump", ob_dump, label="Overburden Dump", alternative=alternative))
+        # Per-year cumulative slices: Year N plate shows OB[year=N], which is
+        # what's been dumped on the surface by the end of year N. Each grows
+        # concentrically from the dump anchor.
+        for i, slice_poly in enumerate(_per_year_cumulative(ob_dump, plan_years), start=1):
+            if slice_poly is None or slice_poly.is_empty:
+                continue
+            features.append(_wgs_feature(
+                "overburden_dump", slice_poly, year=i,
+                label=f"OB dump through Year {i}", alternative=alternative,
+            ))
     if topsoil_stack and not topsoil_stack.is_empty:
-        features.append(_wgs_feature("topsoil_stack", topsoil_stack, label="Topsoil Stack", alternative=alternative))
+        for i, slice_poly in enumerate(_per_year_cumulative(topsoil_stack, plan_years), start=1):
+            if slice_poly is None or slice_poly.is_empty:
+                continue
+            features.append(_wgs_feature(
+                "topsoil_stack", slice_poly, year=i,
+                label=f"Topsoil stack through Year {i}", alternative=alternative,
+            ))
     if plantation and not plantation.is_empty:
-        features.append(_wgs_feature("plantation", plantation, label="Plantation", alternative=alternative))
+        for i, slice_poly in enumerate(_per_year_cumulative(plantation, plan_years), start=1):
+            if slice_poly is None or slice_poly.is_empty:
+                continue
+            features.append(_wgs_feature(
+                "plantation", slice_poly, year=i,
+                label=f"Plantation through Year {i}", alternative=alternative,
+            ))
     features.append(_wgs_feature("haul_road", haul_road, label="Haul Road", alternative=alternative))
 
     # Quantity table per year
@@ -241,6 +262,41 @@ def generate_for_alternative(project: dict[str, Any], alternative: str) -> Plann
         quantities={"alternative": alternative, "rows": rows, "generated_at": datetime.now(timezone.utc).isoformat()},
         warnings=warnings,
     )
+
+
+def _per_year_cumulative(full_poly: Polygon, plan_years: int) -> list[Polygon | None]:
+    """Return [poly_year_1, ..., poly_year_N] where poly_year_N has cumulative
+    area proportional to N / plan_years, growing concentrically from the
+    polygon's centroid and intersected with the full polygon.
+
+    Year `plan_years` always returns the full polygon. Used to slice OB,
+    topsoil, and plantation footprints into per-year cumulative growth.
+    """
+    if plan_years <= 1:
+        return [full_poly]
+    anchor = full_poly.centroid
+    full_area = full_poly.area
+    out: list[Polygon | None] = []
+    seed_radius = math.sqrt(full_area / math.pi)
+    for i in range(1, plan_years + 1):
+        if i == plan_years:
+            out.append(full_poly)
+            continue
+        target_area = full_area * (i / plan_years)
+        radius = math.sqrt(target_area / math.pi)
+        clipped: Polygon | None = None
+        for _ in range(8):
+            circle = Point(anchor.x, anchor.y).buffer(radius, resolution=48)
+            clipped_geom = circle.intersection(full_poly)
+            clipped = _largest_polygon(clipped_geom)
+            if clipped is None or clipped.is_empty:
+                radius *= 1.5
+                continue
+            if clipped.area >= target_area * 0.95:
+                break
+            radius = min(radius * 1.3, seed_radius * 3.0)
+        out.append(clipped if clipped is not None and not clipped.is_empty else None)
+    return out
 
 
 def _shrink_to_area(poly: Polygon, target_area: float, *, prefer_center: bool) -> Polygon:
