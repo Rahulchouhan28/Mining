@@ -24,7 +24,10 @@
             "surface_plan", "surface_geological_plan", "geological_plan",
             "geological_section", "progressive_mine_closure_plan",
             "conceptual_plan", "environment_plan", "key_plan",
-            "financial_assurance_plan", "year_wise_mining_plan", "other"
+            "financial_assurance_plan", "year_wise_mining_plan",
+            "proposed_five_year_development_plan", "year_1_plan",
+            "year_2_plan", "year_3_plan", "year_4_plan", "year_5_plan",
+            "approved_mining_plan", "annexures", "other"
           ]
         },
         "scale": { "type": "string", "examples": ["1:1000", "1:2000"] },
@@ -40,14 +43,22 @@
         "properties": {
           "id": { "type": "string" },
           "filename": { "type": "string" },
+          "original_filename": { "type": "string" },
           "stored_path": { "type": "string" },
+          "storage_backend": {
+            "type": "string",
+            "description": "Storage provider key for future migration (currently 'local')."
+          },
           "category": {
             "type": "string",
             "enum": [
               "surface_plan", "geological_plan", "geological_section",
               "environment_plan", "key_plan", "progressive_mine_closure_plan",
               "conceptual_plan", "financial_assurance_plan",
-              "borehole_data", "chemical_analysis", "production_data", "other"
+              "borehole_data", "chemical_analysis", "production_data",
+              "proposed_five_year_development_plan", "year_1_plan",
+              "year_2_plan", "year_3_plan", "year_4_plan", "year_5_plan",
+              "approved_mining_plan", "annexures", "other"
             ]
           },
           "mime_type": { "type": "string" },

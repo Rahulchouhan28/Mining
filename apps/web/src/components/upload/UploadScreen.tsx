@@ -18,17 +18,25 @@ interface CardSpec {
 }
 
 const CARDS: CardSpec[] = [
-  { category: "surface_plan",                  title: "Surface Plan",                 accepted: "PDF, KML, KMZ, GeoJSON, JPG, PNG", accept: ".pdf,.kml,.kmz,.geojson,.json,.jpg,.jpeg,.png" },
+  { category: "approved_mining_plan",          title: "Approved Mining Plan",         accepted: "PDF",                               accept: ".pdf" },
+  { category: "surface_plan",                  title: "Surface Plan",                 accepted: "PDF, KML, KMZ, GeoJSON, JPG, PNG",  accept: ".pdf,.kml,.kmz,.geojson,.json,.jpg,.jpeg,.png" },
   { category: "geological_plan",               title: "Geological Plan",              accepted: "PDF, KML, KMZ, GeoJSON, image",     accept: ".pdf,.kml,.kmz,.geojson,.json,.jpg,.jpeg,.png" },
   { category: "geological_section",            title: "Geological Section",           accepted: "PDF, image",                        accept: ".pdf,.jpg,.jpeg,.png" },
-  { category: "environment_plan",              title: "Environment Plan",             accepted: "PDF, image",                        accept: ".pdf,.jpg,.jpeg,.png" },
+  { category: "environment_plan",              title: "Environment Plan",             accepted: "PDF, KML, KMZ, image",              accept: ".pdf,.kml,.kmz,.jpg,.jpeg,.png" },
   { category: "key_plan",                      title: "Key Plan",                     accepted: "PDF, image",                        accept: ".pdf,.jpg,.jpeg,.png" },
-  { category: "progressive_mine_closure_plan", title: "Progressive Mine Closure Plan",accepted: "PDF, image",                        accept: ".pdf,.jpg,.jpeg,.png" },
-  { category: "conceptual_plan",               title: "Conceptual Plan",              accepted: "PDF, image",                        accept: ".pdf,.jpg,.jpeg,.png" },
-  { category: "financial_assurance_plan",      title: "Financial Assurance Plan",     accepted: "PDF, Excel, image",                 accept: ".pdf,.xlsx,.xls,.jpg,.jpeg,.png" },
+  { category: "progressive_mine_closure_plan", title: "Progressive Mine Closure Plan",accepted: "PDF, KML, KMZ, image",              accept: ".pdf,.kml,.kmz,.jpg,.jpeg,.png" },
+  { category: "conceptual_plan",               title: "Conceptual Plan",              accepted: "PDF, KML, KMZ, image",              accept: ".pdf,.kml,.kmz,.jpg,.jpeg,.png" },
+  { category: "financial_assurance_plan",      title: "Financial Assurance Plan",     accepted: "PDF, KML, KMZ, Excel, image",       accept: ".pdf,.kml,.kmz,.xlsx,.xls,.jpg,.jpeg,.png" },
+  { category: "proposed_five_year_development_plan", title: "Five Year Development Plan", accepted: "PDF, KML, KMZ",                     accept: ".pdf,.kml,.kmz" },
+  { category: "year_1_plan",                   title: "Year 1 Plan",                  accepted: "PDF, KML, KMZ",                     accept: ".pdf,.kml,.kmz" },
+  { category: "year_2_plan",                   title: "Year 2 Plan",                  accepted: "PDF, KML, KMZ",                     accept: ".pdf,.kml,.kmz" },
+  { category: "year_3_plan",                   title: "Year 3 Plan",                  accepted: "PDF, KML, KMZ",                     accept: ".pdf,.kml,.kmz" },
+  { category: "year_4_plan",                   title: "Year 4 Plan",                  accepted: "PDF, KML, KMZ",                     accept: ".pdf,.kml,.kmz" },
+  { category: "year_5_plan",                   title: "Year 5 Plan",                  accepted: "PDF, KML, KMZ",                     accept: ".pdf,.kml,.kmz" },
   { category: "borehole_data",                 title: "Borehole Data",                accepted: "Excel, CSV, PDF",                   accept: ".xlsx,.xls,.csv,.pdf" },
   { category: "chemical_analysis",             title: "Chemical Analysis",            accepted: "Excel, CSV, PDF",                   accept: ".xlsx,.xls,.csv,.pdf" },
   { category: "production_data",               title: "Production Data",              accepted: "Excel, CSV, PDF",                   accept: ".xlsx,.xls,.csv,.pdf" },
+  { category: "annexures",                     title: "Annexures & Others",           accepted: "PDF, Excel, Word, image",           accept: ".pdf,.xlsx,.xls,.doc,.docx,.jpg,.jpeg,.png" },
 ];
 
 interface Props {
@@ -40,9 +48,7 @@ export function UploadScreen({ slug, initialFiles }: Props) {
   const router = useRouter();
   const [files, setFiles] = useState<UploadedFile[]>(initialFiles);
   const [uploadingCat, setUploadingCat] = useState<UploadCategory | null>(null);
-  const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
 
   const filesByCategory = files.reduce<Record<string, UploadedFile[]>>((acc, f) => {
     (acc[f.category] ??= []).push(f);
@@ -70,25 +76,8 @@ export function UploadScreen({ slug, initialFiles }: Props) {
     [slug],
   );
 
-  async function autoPrepareAndContinue() {
-    setError(null);
-    setPreparing(true);
-    setStatus("Extracting lease boundary and generating year-wise plan…");
-    try {
-      const res = await fetch(`/api/projects/${slug}/auto-prepare`, { method: "POST" });
-      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-      const out = (await res.json()) as { lease_source: string | null; plan_count: number };
-      setStatus(`Generated ${out.plan_count} plan${out.plan_count === 1 ? "" : "s"} (${out.lease_source ?? "default"}). Loading map…`);
-      router.push(`/project/${slug}/6`);
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Auto-prepare failed");
-      setPreparing(false);
-    }
-  }
 
   const totalCount = files.length;
-  const vectorCount = files.filter((f) => /\.(kml|kmz|geojson|json)$/i.test(f.filename)).length;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -116,25 +105,12 @@ export function UploadScreen({ slug, initialFiles }: Props) {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <div className="text-xs text-slate-600">
             <span className="font-medium text-slate-900">{totalCount}</span> file{totalCount === 1 ? "" : "s"} uploaded
-            {vectorCount > 0 && (
-              <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                {vectorCount} vector file{vectorCount === 1 ? "" : "s"} detected — lease will be auto-extracted
-              </span>
-            )}
-            {status && <span className="ml-2 text-amber-700">{status}</span>}
           </div>
-          <Button type="button" variant="primary" size="md" disabled={preparing} onClick={autoPrepareAndContinue}>
-            {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {preparing ? "Generating plan…" : "Generate Year-Wise Plan"}
-            {!preparing && <ArrowRight className="h-4 w-4" />}
-          </Button>
         </div>
       </div>
 
       <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-        Upload as many files as you have. If any of them is a KML / KMZ / GeoJSON we&apos;ll parse the
-        lease polygon directly. If you only have PDFs or images, we&apos;ll generate a square lease sized
-        from the area you entered on step 1 (you can adjust it on the next screen).
+        Upload as many files as you have. These files will be stored in your project's document repository.
       </p>
     </div>
   );

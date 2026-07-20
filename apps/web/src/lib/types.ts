@@ -11,7 +11,10 @@ export type UploadCategory =
   | "surface_plan" | "geological_plan" | "geological_section"
   | "environment_plan" | "key_plan" | "progressive_mine_closure_plan"
   | "conceptual_plan" | "financial_assurance_plan"
-  | "borehole_data" | "chemical_analysis" | "production_data" | "other";
+  | "borehole_data" | "chemical_analysis" | "production_data" 
+  | "proposed_five_year_development_plan" | "year_1_plan" | "year_2_plan" 
+  | "year_3_plan" | "year_4_plan" | "year_5_plan" 
+  | "approved_mining_plan" | "annexures" | "other";
 
 export type LayerType =
   | "lease_boundary" | "statutory_barrier_7_5m"
@@ -48,7 +51,9 @@ export interface ProjectDetails {
 export interface UploadedFile {
   id: string;
   filename: string;
+  original_filename?: string;
   stored_path?: string;
+  storage_backend?: string;
   category: UploadCategory;
   mime_type?: string;
   size_bytes?: number;
@@ -161,25 +166,17 @@ export interface ProjectListItem {
   updated_at?: string;
 }
 
-export type StepNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type StepNumber = 1 | 2;
 
 export interface StepDef {
   num: StepNumber;
   label: string;
   short: string;
-  /** Steps on the happy path 1→2→6→9. Optional steps are reachable from the
-   *  sidebar but skipped by the auto-prepare flow. */
+  /** Steps on the happy path 1→2. */
   advanced?: boolean;
 }
 
 export const STEPS: StepDef[] = [
   { num: 1, label: "Project Setup",      short: "Project" },
   { num: 2, label: "Upload Plans",       short: "Upload" },
-  { num: 3, label: "Extract Layers",     short: "Digitize",  advanced: true },
-  { num: 4, label: "Engineering Inputs", short: "Inputs",    advanced: true },
-  { num: 5, label: "Alternatives",       short: "Alts",      advanced: true },
-  { num: 6, label: "Year-Wise Plan",     short: "Plan" },
-  { num: 7, label: "Review & Edit",      short: "Review",    advanced: true },
-  { num: 8, label: "PDF Composer",       short: "PDF",       advanced: true },
-  { num: 9, label: "Export Center",      short: "Export" },
 ];

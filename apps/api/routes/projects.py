@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 
 import storage
-from services.extract import auto_prepare
-from services.year_planner import generate_for_project
+from services.document_storage import DocumentStorage, get_document_storage, sanitize_filename
 
 router = APIRouter()
+
+
+def document_storage() -> DocumentStorage:
+    try:
+        return get_document_storage(storage.ROOT)
+    except ValueError as e:
+        raise HTTPException(500, str(e)) from e
 
 
 @router.get("")
@@ -51,24 +60,29 @@ def delete_project(slug: str) -> dict[str, str]:
 
 @router.post("/{slug}/uploads")
 async def upload_file(slug: str, category: str = Form(...), file: UploadFile = File(...)) -> dict[str, Any]:
-    import uuid
-    from datetime import datetime, timezone
-
     project = storage.load_project(slug)
-    target_dir = storage.project_dir(slug) / "uploads"
-    safe_name = (file.filename or "upload").replace("/", "_").replace("\\", "_")
     file_id = uuid.uuid4().hex[:12]
-    target = target_dir / f"{file_id}_{safe_name}"
-    contents = await file.read()
-    target.write_bytes(contents)
+    original_filename = file.filename or "upload"
+    mime_type = file.content_type or "application/octet-stream"
+    store = document_storage()
+    file.file.seek(0)
+    stored = store.save(
+        project_slug=slug,
+        file_id=file_id,
+        original_filename=original_filename,
+        mime_type=mime_type,
+        source=file.file,
+    )
 
     record = {
         "id": file_id,
-        "filename": safe_name,
-        "stored_path": str(target.relative_to(storage.ROOT.parent)),
+        "filename": stored.original_filename,
+        "original_filename": stored.original_filename,
+        "stored_path": stored.stored_path,
+        "storage_backend": stored.storage_backend,
         "category": category,
-        "mime_type": file.content_type or "application/octet-stream",
-        "size_bytes": len(contents),
+        "mime_type": stored.mime_type,
+        "size_bytes": stored.size_bytes,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }
     project.setdefault("uploaded_files", []).append(record)
@@ -76,52 +90,28 @@ async def upload_file(slug: str, category: str = Form(...), file: UploadFile = F
     return record
 
 
-ALL_ALTERNATIVES = [
-    "base", "conservative", "aggressive",
-    "low_waste", "environment_sensitive",
-    "cost_optimized", "grade_blending", "minimum_disturbance",
-]
-
-
-@router.post("/{slug}/auto-prepare")
-def auto_prepare_project(slug: str) -> dict[str, Any]:
-    """Extract a lease boundary from uploaded vector files (or synthesize one
-    from area_ha), seed engineering defaults, and run the year-wise generator
-    for ALL 8 alternatives so every approach button is populated on Step 6 /
-    Step 9. Per-alternative cherry-picking is done from Step 5 (Advanced).
-    """
-    try:
-        project = auto_prepare(slug)
-    except FileNotFoundError as e:
-        raise HTTPException(404, str(e)) from e
-
-    project["selected_alternatives"] = list(ALL_ALTERNATIVES)
-    result = generate_for_project(project, ALL_ALTERNATIVES)
-    project["generated_plans"] = result["generated_plans"]
-    project["quantity_tables"] = result["quantity_tables"]
-    project["validation_warnings"] = result["validation_warnings"]
-    storage.save_project(slug, project)
-
-    lease_source = None
-    for f in (project.get("digitized_layers") or {}).get("features") or []:
-        if (f.get("properties") or {}).get("layer_type") == "lease_boundary":
-            lease_source = (f.get("properties") or {}).get("source")
-            break
-
-    return {
-        "slug": slug,
-        "alternatives": list(ALL_ALTERNATIVES),
-        "lease_source": lease_source,
-        "plan_count": len(result["generated_plans"]),
-        "warning_count": len(result["validation_warnings"]),
-    }
-
-
 @router.get("/{slug}/uploads/{file_id}")
-def get_upload(slug: str, file_id: str) -> FileResponse:
+def get_upload(slug: str, file_id: str) -> StreamingResponse:
     project = storage.load_project(slug)
     for f in project.get("uploaded_files", []):
         if f["id"] == file_id:
-            path = storage.ROOT.parent / f["stored_path"]
-            return FileResponse(path, media_type=f.get("mime_type", "application/octet-stream"), filename=f["filename"])
+            store = document_storage()
+            backend = f.get("storage_backend") or "local"
+            if backend != store.backend_name:
+                raise HTTPException(501, f"storage backend '{backend}' is not configured")
+            stored_path = f.get("stored_path")
+            if not stored_path or not store.exists(stored_path):
+                raise HTTPException(404, "stored file not found")
+            filename = f.get("original_filename") or f.get("filename") or "upload"
+            quoted = quote(filename, safe="")
+            safe_header = sanitize_filename(filename).replace('"', "")
+            return StreamingResponse(
+                store.iter_file(stored_path),
+                media_type=f.get("mime_type", "application/octet-stream"),
+                headers={
+                    "content-disposition": (
+                        f'attachment; filename="{safe_header}"; filename*=UTF-8\'\'{quoted}'
+                    ),
+                },
+            )
     raise HTTPException(404, "upload not found")
